@@ -3,14 +3,25 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun run index.ts"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/express": "^5.0.3"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.74",
-    "arabic-persian-reshaper": "^1.0.1"
+    "arabic-persian-reshaper": "^1.0.1",
+    "axios": "^1.10.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "form-data": "^4.0.4",
+    "nodemon": "^3.1.10",
+    "uploadthing": "^7.7.3",
+    "uuid": "^11.1.0"
   }
 }
