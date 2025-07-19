@@ -1,0 +1,16 @@
+{
+  "name": "text_image_api",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.74",
+    "arabic-persian-reshaper": "^1.0.1"
+  }
+}
