@@ -118,6 +118,15 @@ serve({
         // Word wrap
         const maxTextWidth = WIDTH - 2 * PADDING;
         const lines = wrapTextRTL(ctx, text, maxTextWidth, LETTER_SPACING);
+        if (lines.length > 5) {
+          return new Response(
+            JSON.stringify({ error: "The text is more than 5 lines." }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
         // Calculate vertical centering
         const lineHeight = FONT_SIZE * 1.5;
         const totalTextHeight = lines.length * lineHeight;
