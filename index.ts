@@ -1,6 +1,7 @@
 import express from "express";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 // @ts-ignore
 import reshaper from "arabic-persian-reshaper";
 import { UTApi } from "uploadthing/server";
@@ -11,11 +12,12 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
+// Handle __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const fontPath = join(__dirname, "assets/fonts/fa/Estedad-FD-Medium.woff2");
-console.log("Font path:", fontPath);
 const fontRegistered = GlobalFonts.registerFromPath(fontPath, "Estedad");
-console.log("Font registered:", fontRegistered);
-console.log("Font families:", GlobalFonts.families);
 
 const WIDTH = 1080;
 const HEIGHT = 1080;
@@ -105,13 +107,12 @@ app.get("/", (req, res) => {
   });
 });
 
-app.post("/image", async (req, res) => {
+app.post("/image", async (req, res): Promise<void> => {
   try {
     let text = String(req.body.text);
     if (typeof text !== "string" || !text.trim()) {
-      return res
-        .status(400)
-        .json({ error: "Missing or invalid 'text' field." });
+      res.status(400).json({ error: "Missing or invalid 'text' field." });
+      return;
     }
     text = reshaper.PersianShaper.convertArabic(text);
 
@@ -126,7 +127,8 @@ app.post("/image", async (req, res) => {
     const maxTextWidth = WIDTH - 2 * PADDING;
     const lines = wrapTextRTL(ctx, text, maxTextWidth, LETTER_SPACING);
     if (lines.length > 5) {
-      return res.status(400).json({ error: "The text is more than 5 lines." });
+      res.status(400).json({ error: "The text is more than 5 lines." });
+      return;
     }
     const lineHeight = FONT_SIZE * 1.5;
     const totalTextHeight = lines.length * lineHeight;
@@ -147,9 +149,8 @@ app.post("/image", async (req, res) => {
     // Upload to UploadThing using UTApi
     const uploadthingToken = process.env.UPLOADTHING_TOKEN;
     if (!uploadthingToken) {
-      return res
-        .status(500)
-        .json({ error: "UploadThing token not set in .env" });
+      res.status(500).json({ error: "UploadThing token not set in .env" });
+      return;
     }
     const utapi = new UTApi({ token: uploadthingToken });
     // Use File class (polyfilled if needed) with unique filename
@@ -157,17 +158,18 @@ app.post("/image", async (req, res) => {
     const file = new FileClass([png], uniqueName, { type: "image/png" });
     const uploadRes = await utapi.uploadFiles(file);
     if (!uploadRes || !uploadRes.data || !uploadRes.data.url) {
-      return res
-        .status(500)
-        .json({ error: "Failed to upload image to UploadThing" });
+      res.status(500).json({ error: "Failed to upload image to UploadThing" });
+      return;
     }
-    return res.status(200).json({ url: uploadRes.data.url });
+    res.status(200).json({ url: uploadRes.data.url });
   } catch (e) {
     console.error("Error generating image:", e);
     res.status(500).json({ error: "Invalid request or server error." });
   }
 });
 
-app.listen(3000, () => {
-  console.log("Express server listening on port 3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Express server listening on port ${PORT}`);
 });
