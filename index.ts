@@ -96,6 +96,15 @@ try {
   } as any;
 }
 
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Text Image API is running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.post("/image", async (req, res) => {
   try {
     let text = String(req.body.text);
