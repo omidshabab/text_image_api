@@ -8,7 +8,7 @@ A RESTful API service that generates beautiful images from text, with full suppo
 - 🌐 **RTL Support**: Full support for Persian and Arabic text with proper reshaping
 - 📐 **Custom Styling**: Dark theme with white text, optimized typography
 - 🔤 **Persian Font**: Uses Estedad font for beautiful Persian text rendering
-- 📦 **Auto Upload**: Automatically uploads generated images to UploadThing
+- 📦 **Auto Upload**: Automatically uploads generated images to Liara object storage (S3-compatible) with UploadThing fallback
 - 🚀 **Express API**: Fast and lightweight REST API built with Express.js
 - 📝 **Text Wrapping**: Intelligent text wrapping with a maximum of 5 lines
 - ✅ **TypeScript**: Fully typed with TypeScript for better development experience
@@ -38,7 +38,18 @@ bun install
 
 3. Create a `.env` file in the root directory:
 ```env
+# Liara Object Storage (S3-compatible) - Primary storage
+LIARA_ACCESS_KEY=your_liara_access_key
+LIARA_SECRET_KEY=your_liara_secret_key
+LIARA_BUCKET=your_bucket_name
+LIARA_ENDPOINT=https://storage.iran.liara.space
+LIARA_REGION=us-east-1
+LIARA_PUBLIC_URL=https://your-bucket.storage.iran.liara.space
+
+# UploadThing - Fallback storage (optional, but recommended)
 UPLOADTHING_TOKEN=your_uploadthing_token_here
+
+# Server Configuration
 PORT=3000
 ```
 
@@ -52,15 +63,31 @@ Create a `.env` file with the following variables:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `UPLOADTHING_TOKEN` | Your UploadThing API token | Yes | - |
+| `LIARA_ACCESS_KEY` | Your Liara object storage access key | Yes* | - |
+| `LIARA_SECRET_KEY` | Your Liara object storage secret key | Yes* | - |
+| `LIARA_BUCKET` | Your Liara bucket name | Yes* | - |
+| `LIARA_ENDPOINT` | Liara S3 endpoint URL | No | `https://storage.iran.liara.space` |
+| `LIARA_REGION` | Liara region | No | `us-east-1` |
+| `LIARA_PUBLIC_URL` | Public URL for accessing uploaded files | No | Auto-generated |
+| `UPLOADTHING_TOKEN` | Your UploadThing API token | Yes* | - |
 | `PORT` | Server port number | No | 3000 |
 
-### Getting UploadThing Token
+\* Either Liara or UploadThing credentials are required. Liara is used by default, with UploadThing as fallback.
+
+### Getting Liara Object Storage Credentials
+
+1. Sign up at [Liara](https://liara.ir/)
+2. Create an object storage bucket
+3. Get your access key and secret key from the dashboard
+4. Add them to your `.env` file
+5. Set `LIARA_PUBLIC_URL` to your bucket's public URL (if you have a custom domain/CDN)
+
+### Getting UploadThing Token (Fallback)
 
 1. Sign up at [UploadThing](https://uploadthing.com/)
 2. Create a new project
 3. Get your API token from the dashboard
-4. Add it to your `.env` file
+4. Add it to your `.env` file (used as fallback if Liara fails)
 
 ## Usage
 
@@ -116,9 +143,14 @@ Generate an image from text.
 **Request Body:**
 ```json
 {
-  "text": "Your text here"
+  "text": "Your text here",
+  "useUploadThing": false
 }
 ```
+
+**Request Parameters:**
+- `text` (required): The text to convert to an image
+- `useUploadThing` (optional): Set to `true` to force using UploadThing instead of Liara. Default: `false` (uses Liara by default)
 
 **Response (Success):**
 ```json
@@ -136,7 +168,7 @@ Generate an image from text.
 
 **Error Codes:**
 - `400`: Missing or invalid text, or text exceeds 5 lines
-- `500`: Server error or UploadThing upload failure
+- `500`: Server error or upload failure (both Liara and UploadThing failed)
 
 ### Example Usage
 
@@ -217,7 +249,8 @@ text_image_api/
 - **TypeScript**: Type-safe JavaScript
 - **@napi-rs/canvas**: High-performance canvas implementation
 - **arabic-persian-reshaper**: Persian/Arabic text reshaping for proper display
-- **UploadThing**: File upload service
+- **@aws-sdk/client-s3**: AWS SDK for S3-compatible storage (Liara)
+- **UploadThing**: File upload service (fallback)
 - **dotenv**: Environment variable management
 - **uuid**: Unique identifier generation
 
@@ -242,7 +275,7 @@ The project uses strict TypeScript configuration with:
 - Maximum 5 lines of text per image
 - Text is automatically wrapped to fit within the canvas
 - Currently optimized for Persian/Arabic text (RTL)
-- Requires UploadThing account for image hosting
+- Requires Liara object storage or UploadThing account for image hosting
 
 ## Deployment
 
@@ -317,7 +350,12 @@ In Coolify, navigate to your application's environment variables section and add
 
 | Variable | Value | Description |
 |----------|-------|-------------|
-| `UPLOADTHING_TOKEN` | `your_uploadthing_token` | Your UploadThing API token (required) |
+| `LIARA_ACCESS_KEY` | `your_liara_access_key` | Your Liara access key (required for primary storage) |
+| `LIARA_SECRET_KEY` | `your_liara_secret_key` | Your Liara secret key (required for primary storage) |
+| `LIARA_BUCKET` | `your_bucket_name` | Your Liara bucket name (required for primary storage) |
+| `LIARA_ENDPOINT` | `https://storage.iran.liara.space` | Liara endpoint (optional) |
+| `LIARA_PUBLIC_URL` | `https://your-bucket.storage.iran.liara.space` | Public URL for files (optional) |
+| `UPLOADTHING_TOKEN` | `your_uploadthing_token` | Your UploadThing API token (required for fallback) |
 | `PORT` | `3000` | Server port (optional, defaults to 3000) |
 | `NODE_ENV` | `production` | Node environment (optional) |
 
@@ -400,7 +438,7 @@ curl -X POST http://your-domain-or-ip:3000/image \
 **Application Won't Start:**
 - Check application logs in Coolify
 - Verify environment variables are set correctly
-- Ensure `UPLOADTHING_TOKEN` is valid
+- Ensure `LIARA_ACCESS_KEY`, `LIARA_SECRET_KEY`, and `LIARA_BUCKET` are set (or `UPLOADTHING_TOKEN` for fallback)
 
 **Canvas/Image Generation Errors:**
 - The Dockerfile includes all required system libraries for `@napi-rs/canvas`

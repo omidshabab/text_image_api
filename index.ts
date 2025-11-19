@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 // @ts-ignore
 import reshaper from "arabic-persian-reshaper";
 import { UTApi } from "uploadthing/server";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 dotenv.config();
@@ -82,6 +83,61 @@ function wrapTextRTL(
   return lines;
 }
 
+// Liara S3 Configuration
+const liaraS3Client = new S3Client({
+  endpoint: process.env.LIARA_ENDPOINT || "https://storage.iran.liara.space",
+  region: process.env.LIARA_REGION || "us-east-1",
+  credentials: {
+    accessKeyId: process.env.LIARA_ACCESS_KEY || "",
+    secretAccessKey: process.env.LIARA_SECRET_KEY || "",
+  },
+  forcePathStyle: true,
+});
+
+const LIARA_BUCKET = process.env.LIARA_BUCKET || "";
+const LIARA_PUBLIC_URL = process.env.LIARA_PUBLIC_URL || "";
+
+// Upload to Liara S3
+async function uploadToLiara(
+  buffer: Buffer,
+  filename: string
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: LIARA_BUCKET,
+    Key: filename,
+    Body: buffer,
+    ContentType: "image/png",
+    ACL: "public-read",
+  });
+
+  await liaraS3Client.send(command);
+  
+  // Construct public URL
+  const publicUrl = LIARA_PUBLIC_URL
+    ? `${LIARA_PUBLIC_URL}/${filename}`
+    : `${process.env.LIARA_ENDPOINT || "https://storage.iran.liara.space"}/${LIARA_BUCKET}/${filename}`;
+  
+  return publicUrl;
+}
+
+// Upload to UploadThing
+async function uploadToUploadThing(
+  buffer: Buffer,
+  filename: string
+): Promise<string> {
+  const uploadthingToken = process.env.UPLOADTHING_TOKEN;
+  if (!uploadthingToken) {
+    throw new Error("UploadThing token not set in .env");
+  }
+  const utapi = new UTApi({ token: uploadthingToken });
+  const file = new FileClass([buffer], filename, { type: "image/png" });
+  const uploadRes = await utapi.uploadFiles(file);
+  if (!uploadRes || !uploadRes.data || !uploadRes.data.url) {
+    throw new Error("Failed to upload image to UploadThing");
+  }
+  return uploadRes.data.url;
+}
+
 // Polyfill File class for Node.js if not available
 let FileClass: typeof File;
 try {
@@ -145,23 +201,51 @@ app.post("/image", async (req, res): Promise<void> => {
       y += lineHeight;
     }
     const png = await canvas.encode("png");
-
-    // Upload to UploadThing using UTApi
-    const uploadthingToken = process.env.UPLOADTHING_TOKEN;
-    if (!uploadthingToken) {
-      res.status(500).json({ error: "UploadThing token not set in .env" });
-      return;
-    }
-    const utapi = new UTApi({ token: uploadthingToken });
-    // Use File class (polyfilled if needed) with unique filename
     const uniqueName = uuidv4() + ".png";
-    const file = new FileClass([png], uniqueName, { type: "image/png" });
-    const uploadRes = await utapi.uploadFiles(file);
-    if (!uploadRes || !uploadRes.data || !uploadRes.data.url) {
-      res.status(500).json({ error: "Failed to upload image to UploadThing" });
+
+    // Check if UploadThing is explicitly requested in the request body
+    const useUploadThing = req.body.useUploadThing === true;
+
+    let imageUrl: string | null = null;
+    let uploadError: Error | null = null;
+
+    // Try Liara first (unless UploadThing is explicitly requested)
+    if (!useUploadThing) {
+      try {
+        // Check if Liara is configured
+        if (!LIARA_BUCKET || !process.env.LIARA_ACCESS_KEY || !process.env.LIARA_SECRET_KEY) {
+          throw new Error("Liara configuration is missing");
+        }
+        imageUrl = await uploadToLiara(png, uniqueName);
+      } catch (error) {
+        console.error("Liara upload failed, falling back to UploadThing:", error);
+        uploadError = error as Error;
+        // Fall through to UploadThing fallback
+      }
+    }
+
+    // Fallback to UploadThing if Liara failed or was explicitly requested
+    if (useUploadThing || !imageUrl) {
+      try {
+        imageUrl = await uploadToUploadThing(png, uniqueName);
+      } catch (error) {
+        console.error("UploadThing upload failed:", error);
+        res.status(500).json({
+          error: "Failed to upload image to both Liara and UploadThing",
+          details: uploadError
+            ? `Liara error: ${uploadError.message}, UploadThing error: ${(error as Error).message}`
+            : (error as Error).message,
+        });
+        return;
+      }
+    }
+
+    if (!imageUrl) {
+      res.status(500).json({ error: "Failed to upload image" });
       return;
     }
-    res.status(200).json({ url: uploadRes.data.url });
+
+    res.status(200).json({ url: imageUrl });
   } catch (e) {
     console.error("Error generating image:", e);
     res.status(500).json({ error: "Invalid request or server error." });
