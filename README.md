@@ -138,24 +138,56 @@ Check if the API is running.
 
 **POST** `/image`
 
-Generate an image from text.
+Generate an image (or multiple images) from text with automatic pagination support. If the text is too long to fit on a single page, the API automatically creates multiple images, similar to how Word or Google Docs handle page breaks.
 
 **Request Body:**
 ```json
 {
   "text": "Your text here",
+  "width": 1080,
+  "height": 1080,
+  "bgColor": "#181A20",
+  "textColor": "#fff",
+  "fontSize": 64,
+  "letterSpacing": -5,
+  "padding": 80,
   "useUploadThing": false
 }
 ```
 
 **Request Parameters:**
-- `text` (required): The text to convert to an image
-- `useUploadThing` (optional): Set to `true` to force using UploadThing instead of Liara. Default: `false` (uses Liara by default)
 
-**Response (Success):**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `text` | string | ✅ Yes | - | The text to convert to an image. Supports Persian and Arabic text with RTL layout. |
+| `width` | number | ❌ No | `1080` | Width of the image in pixels. Must be between 100 and 10000. |
+| `height` | number | ❌ No | `1080` | Height of the image in pixels. Must be between 100 and 10000. |
+| `bgColor` | string | ❌ No | `"#181A20"` | Background color in hex format (e.g., `"#181A20"`, `"#FFFFFF"`). |
+| `textColor` | string | ❌ No | `"#fff"` | Text color in hex format (e.g., `"#FFFFFF"`, `"#000000"`). |
+| `fontSize` | number | ❌ No | `64` | Font size in pixels. |
+| `letterSpacing` | number | ❌ No | `-5` | Letter spacing in pixels. Negative values bring letters closer together. |
+| `padding` | number | ❌ No | `80` | Padding around the text in pixels. Must be non-negative and less than half of the smallest dimension. |
+| `useUploadThing` | boolean | ❌ No | `false` | Set to `true` to force using UploadThing instead of Liara. Default: `false` (uses Liara by default). |
+
+**Response (Success - Single Page):**
+When the text fits on a single page:
 ```json
 {
   "url": "https://uploadthing.com/f/..."
+}
+```
+
+**Response (Success - Multiple Pages):**
+When the text is split across multiple pages:
+```json
+{
+  "urls": [
+    "https://uploadthing.com/f/page1...",
+    "https://uploadthing.com/f/page2...",
+    "https://uploadthing.com/f/page3..."
+  ],
+  "pageCount": 3,
+  "message": "Text was split into 3 pages"
 }
 ```
 
@@ -167,21 +199,30 @@ Generate an image from text.
 ```
 
 **Error Codes:**
-- `400`: Missing or invalid text, or text exceeds 5 lines
+- `400`: Missing or invalid text, invalid dimensions, or invalid padding
 - `500`: Server error or upload failure (both Liara and UploadThing failed)
+
+**Pagination Algorithm:**
+The API automatically calculates how many lines of text can fit on each page based on:
+- Image height
+- Font size
+- Padding
+- Line height (1.5x font size)
+
+If the text exceeds the available space on one page, it automatically creates additional pages, similar to how Word or Google Docs handle page breaks. Each page is a separate image that can be displayed sequentially.
 
 ### Example Usage
 
-#### Using cURL
+#### Basic Example (Default Settings)
 
+**Using cURL:**
 ```bash
 curl -X POST http://localhost:3000/image \
   -H "Content-Type: application/json" \
   -d '{"text": "سلام دنیا"}'
 ```
 
-#### Using JavaScript/TypeScript
-
+**Using JavaScript/TypeScript:**
 ```javascript
 const response = await fetch('http://localhost:3000/image', {
   method: 'POST',
@@ -194,11 +235,15 @@ const response = await fetch('http://localhost:3000/image', {
 });
 
 const data = await response.json();
-console.log('Image URL:', data.url);
+if (data.url) {
+  console.log('Single page image URL:', data.url);
+} else if (data.urls) {
+  console.log('Multiple pages:', data.urls);
+  console.log('Total pages:', data.pageCount);
+}
 ```
 
-#### Using Python
-
+**Using Python:**
 ```python
 import requests
 
@@ -208,21 +253,105 @@ response = requests.post(
 )
 
 data = response.json()
-print('Image URL:', data['url'])
+if 'url' in data:
+    print('Single page image URL:', data['url'])
+elif 'urls' in data:
+    print('Multiple pages:', data['urls'])
+    print('Total pages:', data['pageCount'])
+```
+
+#### Custom Dimensions Example
+
+**Using cURL:**
+```bash
+curl -X POST http://localhost:3000/image \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "این یک متن طولانی است که ممکن است به چند صفحه تقسیم شود...",
+    "width": 1920,
+    "height": 1080,
+    "fontSize": 48,
+    "padding": 100
+  }'
+```
+
+**Using JavaScript/TypeScript:**
+```javascript
+const response = await fetch('http://localhost:3000/image', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    text: 'این یک متن طولانی است که ممکن است به چند صفحه تقسیم شود...',
+    width: 1920,
+    height: 1080,
+    bgColor: '#000000',
+    textColor: '#FFFFFF',
+    fontSize: 48,
+    letterSpacing: -3,
+    padding: 100
+  })
+});
+
+const data = await response.json();
+if (data.urls) {
+  console.log(`Generated ${data.pageCount} pages:`);
+  data.urls.forEach((url, index) => {
+    console.log(`Page ${index + 1}: ${url}`);
+  });
+}
+```
+
+#### Long Text with Automatic Pagination
+
+When you send a long text, the API automatically creates multiple images:
+
+```javascript
+const longText = `
+این یک متن بسیار طولانی است که قطعاً به چندین صفحه تقسیم خواهد شد.
+متن ادامه دارد و ادامه دارد و ادامه دارد...
+`;
+
+const response = await fetch('http://localhost:3000/image', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    text: longText,
+    width: 1200,
+    height: 1600,  // Portrait orientation
+    fontSize: 56
+  })
+});
+
+const data = await response.json();
+if (data.urls && data.urls.length > 1) {
+  console.log(`Text was automatically split into ${data.pageCount} pages`);
+  // Display pages sequentially like a document
+  data.urls.forEach((url, index) => {
+    console.log(`Page ${index + 1}: ${url}`);
+  });
+}
 ```
 
 ### Image Specifications
 
-- **Dimensions**: 1080x1080 pixels
+**Default Settings:**
+- **Dimensions**: 1080x1080 pixels (customizable via `width` and `height` parameters)
 - **Format**: PNG
-- **Background Color**: `#181A20` (dark gray)
-- **Text Color**: `#FFFFFF` (white)
-- **Font Size**: 64px
+- **Background Color**: `#181A20` (dark gray, customizable via `bgColor`)
+- **Text Color**: `#FFFFFF` (white, customizable via `textColor`)
+- **Font Size**: 64px (customizable via `fontSize`)
 - **Font Family**: Estedad (Persian font) or sans-serif fallback
-- **Letter Spacing**: -5px
-- **Padding**: 80px
-- **Max Lines**: 5 lines
-- **Text Alignment**: Right-to-Left (RTL)
+- **Letter Spacing**: -5px (customizable via `letterSpacing`)
+- **Padding**: 80px (customizable via `padding`)
+- **Text Alignment**: Right-to-Left (RTL) for Persian/Arabic text
+- **Pagination**: Automatic - text is split across multiple images if it doesn't fit on one page
+
+**Customization:**
+All visual parameters can be customized via the request body. The API automatically calculates how many lines fit on each page based on the provided dimensions, font size, and padding.
 
 ## Project Structure
 
@@ -270,12 +399,15 @@ The project uses strict TypeScript configuration with:
 - Strict null checks
 - No unchecked indexed access
 
-## Limitations
+## Features
 
-- Maximum 5 lines of text per image
-- Text is automatically wrapped to fit within the canvas
-- Currently optimized for Persian/Arabic text (RTL)
-- Requires Liara object storage or UploadThing account for image hosting
+- ✅ **Automatic Pagination**: Like Word or Google Docs, long texts are automatically split across multiple pages
+- ✅ **Customizable Dimensions**: Set any width and height (100-10000 pixels)
+- ✅ **Customizable Styling**: Control colors, font size, spacing, and padding
+- ✅ **RTL Support**: Full support for Persian and Arabic text with proper reshaping
+- ✅ **Intelligent Text Wrapping**: Text automatically wraps to fit within the canvas width
+- ✅ **No Line Limits**: No artificial limits - text can span as many pages as needed
+- ✅ **Professional Layout**: Each page is centered and properly formatted
 
 ## Deployment
 
