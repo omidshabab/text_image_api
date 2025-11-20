@@ -148,10 +148,14 @@ Generate an image (or multiple images) from text with automatic pagination suppo
   "height": 1080,
   "bgColor": "#181A20",
   "textColor": "#fff",
+  "fontName": "Estedad",
+  "fontWeight": "Bold",
   "fontSize": 64,
   "letterSpacing": -5,
   "padding": 80,
-  "useUploadThing": false
+  "useUploadThing": false,
+  "outputFormat": "image",
+  "pdfLayout": "combined"
 }
 ```
 
@@ -164,10 +168,14 @@ Generate an image (or multiple images) from text with automatic pagination suppo
 | `height` | number | ❌ No | `1080` | Height of the image in pixels. Must be between 100 and 10000. |
 | `bgColor` | string | ❌ No | `"#181A20"` | Background color in hex format (e.g., `"#181A20"`, `"#FFFFFF"`). |
 | `textColor` | string | ❌ No | `"#fff"` | Text color in hex format (e.g., `"#FFFFFF"`, `"#000000"`). |
+| `fontName` | string | ❌ No | `"Estedad"` | Supported font family name. Currently `Estedad` fonts are bundled from `assets/fonts/fa/Estedad` (alias `@Estedad`). |
+| `fontWeight` | string or number | ❌ No | `"Medium"` | Font weight to use for the selected family. Supports `Thin`, `ExtraLight`, `Light`, `Regular`, `Medium`, `SemiBold`, `Bold`, `ExtraBold`, `Black` (or CSS numeric equivalents `100`-`900`). |
 | `fontSize` | number | ❌ No | `64` | Font size in pixels. |
 | `letterSpacing` | number | ❌ No | `-5` | Letter spacing in pixels. Negative values bring letters closer together. |
 | `padding` | number | ❌ No | `80` | Padding around the text in pixels. Must be non-negative and less than half of the smallest dimension. |
 | `useUploadThing` | boolean | ❌ No | `false` | Set to `true` to force using UploadThing instead of Liara. Default: `false` (uses Liara by default). |
+| `outputFormat` | string | ❌ No | `"image"` | Set to `"pdf"` to receive PDF output. When `"image"`, the API behaves exactly as before. |
+| `pdfLayout` | string | ❌ No | `"combined"` | Applies when `outputFormat` is `"pdf"` and there are multiple pages. Use `"combined"` to align every page inside a single multi-page PDF (first image becomes the first page). Use `"separate"` to get one PDF per page. |
 
 **Response (Success - Single Page):**
 When the text fits on a single page:
@@ -191,6 +199,32 @@ When the text is split across multiple pages:
 }
 ```
 
+**Response (Success - Combined PDF):**
+When `outputFormat` is `"pdf"` (default layout `combined`):
+```json
+{
+  "url": "https://uploadthing.com/f/text.pdf",
+  "format": "pdf",
+  "pageCount": 3,
+  "layout": "combined"
+}
+```
+
+**Response (Success - Separate PDFs):**
+When requesting `outputFormat: "pdf"` with `pdfLayout: "separate"`:
+```json
+{
+  "urls": [
+    "https://uploadthing.com/f/page1.pdf",
+    "https://uploadthing.com/f/page2.pdf"
+  ],
+  "format": "pdf",
+  "pageCount": 2,
+  "layout": "separate",
+  "message": "Generated 2 separate PDF files covering 2 pages."
+}
+```
+
 **Response (Error):**
 ```json
 {
@@ -210,6 +244,12 @@ The API automatically calculates how many lines of text can fit on each page bas
 - Line height (1.5x font size)
 
 If the text exceeds the available space on one page, it automatically creates additional pages, similar to how Word or Google Docs handle page breaks. Each page is a separate image that can be displayed sequentially.
+
+### Available Fonts
+
+- **Estedad (`@Estedad`)**: Persian font family bundled under `assets/fonts/fa/Estedad`.
+  - Supported weights: `Thin`, `ExtraLight`, `Light`, `Regular`, `Medium`, `SemiBold`, `Bold`, `ExtraBold`, `Black`.
+  - Pass `fontName: "Estedad"` and one of the listed `fontWeight` values (or CSS numeric equivalents like `400` for Regular) in the request body.
 
 ### Example Usage
 
@@ -312,6 +352,33 @@ const longText = `
 این یک متن بسیار طولانی است که قطعاً به چندین صفحه تقسیم خواهد شد.
 متن ادامه دارد و ادامه دارد و ادامه دارد...
 `;
+#### PDF Output Example
+
+Generate a single multi-page PDF (default layout is `combined`):
+```bash
+curl -X POST http://localhost:3000/image \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "خروجی PDF با چند صفحه...",
+    "outputFormat": "pdf"
+  }'
+```
+
+Request separate PDFs per page:
+```javascript
+const response = await fetch('http://localhost:3000/image', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    text: 'هر صفحه در یک PDF جداگانه می‌آید.',
+    outputFormat: 'pdf',
+    pdfLayout: 'separate'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
 
 const response = await fetch('http://localhost:3000/image', {
   method: 'POST',
@@ -344,7 +411,7 @@ if (data.urls && data.urls.length > 1) {
 - **Background Color**: `#181A20` (dark gray, customizable via `bgColor`)
 - **Text Color**: `#FFFFFF` (white, customizable via `textColor`)
 - **Font Size**: 64px (customizable via `fontSize`)
-- **Font Family**: Estedad (Persian font) or sans-serif fallback
+- **Font Family**: Estedad with `Medium` weight (configurable via `fontName` + `fontWeight`)
 - **Letter Spacing**: -5px (customizable via `letterSpacing`)
 - **Padding**: 80px (customizable via `padding`)
 - **Text Alignment**: Right-to-Left (RTL) for Persian/Arabic text
@@ -360,7 +427,11 @@ text_image_api/
 ├── assets/
 │   └── fonts/
 │       └── fa/
-│           └── Estedad-FD-Medium.woff2
+│           └── Estedad/
+│               ├── Estedad-FD-Black.woff2
+│               ├── Estedad-FD-Bold.woff2
+│               ├── ...
+│               └── Estedad-FD-Thin.woff2
 ├── dist/                    # Compiled JavaScript (after build)
 ├── node_modules/            # Dependencies
 ├── index.ts                 # Main application file
