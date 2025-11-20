@@ -9,6 +9,7 @@ A RESTful API service that generates beautiful images from text, with full suppo
 - 📐 **Custom Styling**: Dark theme with white text, optimized typography
 - 🔤 **Persian Font**: Uses Estedad font for beautiful Persian text rendering
 - 📦 **Auto Upload**: Automatically uploads generated images to Liara object storage (S3-compatible) with UploadThing fallback
+- 🧩 **Scene Builder**: Describe frames, groups, and auto-layout stacks (Figma-style) as JSON and get rendered images or PDFs
 - 🚀 **Express API**: Fast and lightweight REST API built with Express.js
 - 📝 **Text Wrapping**: Intelligent text wrapping with a maximum of 5 lines
 - ✅ **TypeScript**: Fully typed with TypeScript for better development experience
@@ -198,6 +199,120 @@ When the text is split across multiple pages:
   "message": "Text was split into 3 pages"
 }
 ```
+
+#### Render Scene (Groups & Auto Layout)
+
+**POST** `/scene`
+
+Render a complex scene defined as a JSON tree (frames, groups, auto layout containers, rectangles, text layers, and images). The layout logic mimics Figma's group + auto layout behavior (padding, spacing, grow/shrink, absolute children, stretch, RTL/LTR text, etc.) and returns both the rendered asset and computed layout metrics.
+
+**Request Body:**
+
+```json
+{
+  "scene": {
+    "type": "FRAME",
+    "width": 1080,
+    "height": 1080,
+    "backgroundColor": "#181A20",
+    "layoutMode": "VERTICAL",
+    "padding": { "top": 80, "right": 80, "bottom": 80, "left": 80 },
+    "itemSpacing": 32,
+    "children": [
+      {
+        "id": "title",
+        "type": "TEXT",
+        "text": "سلام دنیا 👋",
+        "fontSize": 72,
+        "textColor": "#ffffff",
+        "textDirection": "RTL",
+        "letterSpacing": -4,
+        "width": "fill"
+      },
+      {
+        "id": "card",
+        "type": "FRAME",
+        "layoutMode": "HORIZONTAL",
+        "padding": 40,
+        "itemSpacing": 24,
+        "backgroundColor": "#222632",
+        "cornerRadius": 32,
+        "grow": 1,
+        "children": [
+          {
+            "type": "RECT",
+            "width": 160,
+            "height": 160,
+            "cornerRadius": 24,
+            "backgroundColor": "#8b5cf6"
+          },
+          {
+            "type": "TEXT",
+            "text": "Stack sections with primary/counter axis alignment, stretch, grow/shrink and even absolute nodes.",
+            "fontSize": 36,
+            "wrap": true
+          }
+        ]
+      }
+    ]
+  },
+  "backgroundColor": "#10121A",
+  "outputFormat": "image",
+  "useUploadThing": false
+}
+```
+
+**Key Scene Properties:**
+
+| Property | Description |
+|----------|-------------|
+| `type` | `FRAME`, `GROUP`, `RECT`, `TEXT`, or `IMAGE` |
+| `layoutMode` | `NONE`, `HORIZONTAL`, or `VERTICAL` (Auto Layout) |
+| `primaryAxisAlign` | `MIN`, `CENTER`, `MAX`, `SPACE_BETWEEN` |
+| `counterAxisAlign` | `MIN`, `CENTER`, `MAX`, `STRETCH` |
+| `padding` | Number or object `{ top, right, bottom, left }` |
+| `itemSpacing` | Gap between auto-layout children |
+| `width` / `height` | Number, `"auto"`, `"fill"`, or percentage string (e.g. `"50%"`) |
+| `grow` / `shrink` | Flex-like grow/shrink weights for auto layout |
+| `absolute`, `x`, `y` | Absolute children inside auto layout containers |
+| `text`, `fontSize`, `textColor`, `textDirection`, `wrap`, `maxLines` | Text configuration |
+| `imageUrl` | Remote image URL for `IMAGE` nodes |
+
+**Response:**
+
+```json
+{
+  "url": "https://storage.iran.liara.space/.../scene.png",
+  "format": "image",
+  "dimensions": {
+    "width": 1080,
+    "height": 1080
+  },
+  "layout": {
+    "id": "root-1",
+    "type": "FRAME",
+    "layoutMode": "VERTICAL",
+    "x": 0,
+    "y": 0,
+    "width": 1080,
+    "height": 1080,
+    "children": [
+      {
+        "id": "title",
+        "type": "TEXT",
+        "layoutMode": "NONE",
+        "x": 80,
+        "y": 80,
+        "width": 920,
+        "height": 108,
+        "children": []
+      }
+    ]
+  }
+}
+```
+
+Set `"outputFormat": "pdf"` to receive a single-page PDF instead of PNG. Use `"useUploadThing": true` to bypass Liara and upload directly to UploadThing.
 
 **Response (Success - Combined PDF):**
 When `outputFormat` is `"pdf"` (default layout `combined`):
