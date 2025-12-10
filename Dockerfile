@@ -2,19 +2,20 @@
 FROM node:20-slim AS builder
 
 # Install system dependencies required for @napi-rs/canvas
-# Retry logic to handle transient network errors
-RUN set -e; \
-    for i in 1 2 3; do \
-        apt-get update && \
-        apt-get install -y --fix-missing \
-            build-essential \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libjpeg-dev \
-            libgif-dev \
-            librsvg2-dev && \
-        break || sleep 5; \
-    done && \
+# Using DEBIAN_FRONTEND=noninteractive to prevent interactive prompts
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        python3 \
+        libcairo2-dev \
+        libpango1.0-dev \
+        libjpeg-dev \
+        libgif-dev \
+        librsvg2-dev \
+        libharfbuzz-dev \
+        libicu-dev \
+        pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -22,43 +23,45 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies for build)
-RUN npm ci
+# Install dependencies (including devDependencies for build)
+RUN npm ci --prefer-offline --no-audit
 
 # Copy source code and assets
 COPY . .
 
 # Build TypeScript
 RUN npm run build
- 
-# Prepare production node_modules (built in builder so native bindings are present)
-RUN npm ci --omit=dev && \
-    rm -rf /root/.npm
 
 # Production stage
 FROM node:20-slim
 
 # Install runtime dependencies for @napi-rs/canvas
-# Retry logic to handle transient network errors
-RUN set -e; \
-    for i in 1 2 3; do \
-        apt-get update && \
-        apt-get install -y --fix-missing \
-            libcairo2 \
-            libpango-1.0-0 \
-            libpangocairo-1.0-0 \
-            libjpeg62-turbo \
-            libgif7 \
-            librsvg2-2 && \
-        break || sleep 5; \
-    done && \
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libjpeg62-turbo \
+        libgif7 \
+        librsvg2-2 \
+        libharfbuzz0b \
+        libicu72 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files and prebuilt node_modules from builder (includes native canvas)
+# Copy package files
 COPY package*.json ./
+
+# Copy prebuilt node_modules from builder (includes native canvas bindings)
+# The native modules are already compiled in the builder stage
 COPY --from=builder /app/node_modules ./node_modules
+
+# Clean up to reduce image size (remove dev dependencies)
+# Using npm prune is safe here as native modules are already built
+RUN npm prune --production && \
+    rm -rf /root/.npm /tmp/* /var/tmp/*
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
