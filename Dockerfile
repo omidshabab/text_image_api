@@ -24,13 +24,14 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including devDependencies for build)
-RUN npm ci --prefer-offline --no-audit
+# Ensure devDependencies are installed by not setting NODE_ENV=production
+RUN npm ci --no-audit
 
 # Copy source code and assets
 COPY . .
 
-# Build TypeScript
-RUN npm run build
+# Build TypeScript using npx to ensure tsc is found
+RUN npx tsc && cp -r assets dist/
 
 # Production stage
 FROM node:20-slim
