@@ -31,19 +31,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including devDependencies for build)
-# Use npm install instead of npm ci to ensure all dependencies are properly installed
-# Explicitly install TypeScript to ensure it's available
-RUN npm install --no-audit && \
-    echo "Verifying TypeScript installation..." && \
-    if [ ! -d node_modules/typescript ]; then \
-        echo "TypeScript not found after npm install, installing explicitly..." && \
-        npm install typescript@^5.0.0 --save-dev --no-audit; \
-    fi && \
-    echo "TypeScript location:" && \
-    find node_modules -name "typescript" -type d 2>/dev/null | head -3 && \
-    echo "TypeScript files:" && \
-    ls -la node_modules/typescript/ 2>/dev/null | head -5 || echo "TypeScript directory not found"
+# Install dependencies (TypeScript is now in dependencies, so it will always be installed)
+RUN npm install --no-audit
 
 # Copy source code and assets
 COPY . .
