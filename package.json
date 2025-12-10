@@ -1,12 +1,12 @@
 {
   "name": "text_image_api",
-  "module": "index.ts",
+  "module": "./dist/server.js",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "tsx watch index.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc && cp -r assets dist/",
-    "start": "node dist/index.js"
+    "start": "node dist/server.js"
   },
   "devDependencies": {
     "@types/bun": "latest",
