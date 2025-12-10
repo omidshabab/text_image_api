@@ -38,15 +38,13 @@ RUN npm ci --no-audit
 # Copy source code and assets
 COPY . .
 
-# Build TypeScript - ensure PATH includes node_modules/.bin and use npx
-# Show verbose output to debug issues
-RUN export PATH="/app/node_modules/.bin:$PATH" && \
-    echo "=== Build Debug Info ===" && \
-    echo "Current directory:" && pwd && \
-    echo "Files in current directory:" && ls -la | head -20 && \
-    echo "TypeScript version:" && npx tsc --version && \
+# Build TypeScript - use direct path to avoid npx resolving wrong package
+RUN echo "=== Verifying TypeScript installation ===" && \
+    ls -la node_modules/.bin/tsc && \
+    echo "=== TypeScript version ===" && \
+    node_modules/.bin/tsc --version && \
     echo "=== Starting TypeScript compilation ===" && \
-    npx tsc || (echo "=== TypeScript compilation failed ===" && exit 1) && \
+    node_modules/.bin/tsc && \
     echo "=== Copying assets ===" && \
     (test -d assets && cp -r assets dist/ || echo "Warning: assets directory not found") && \
     echo "=== Build completed successfully ==="
