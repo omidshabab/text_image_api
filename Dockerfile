@@ -32,7 +32,11 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (TypeScript is now in dependencies, so it will always be installed)
-RUN npm install --no-audit
+# Ensure optionalDependencies (native canvas bindings) are installed
+RUN npm install --no-audit && \
+    echo "Verifying canvas native bindings installation..." && \
+    ls -la node_modules/@napi-rs/canvas-linux-* 2>/dev/null && echo "✓ Canvas native bindings found" || \
+    (echo "⚠ No platform-specific bindings found, but @napi-rs/canvas will try to build them")
 
 # Copy source code and assets
 COPY . .
@@ -76,11 +80,14 @@ COPY package*.json ./
 
 # Copy prebuilt node_modules from builder (includes native canvas bindings)
 # The native modules are already compiled in the builder stage
+# IMPORTANT: Copy the entire node_modules to preserve native bindings
 COPY --from=builder /app/node_modules ./node_modules
 
-# Clean up to reduce image size (remove dev dependencies)
-# Using npm prune is safe here as native modules are already built
-RUN npm prune --production && \
+# Verify canvas native bindings are present
+RUN echo "Verifying canvas native bindings..." && \
+    ls -la node_modules/@napi-rs/canvas-linux-* 2>/dev/null && echo "✓ Canvas native bindings found" || \
+    (echo "⚠ Checking for canvas bindings..." && find node_modules -name "*canvas*linux*" -type d 2>/dev/null | head -5) && \
+    # Clean up npm cache only (don't prune - native bindings are already built)
     rm -rf /root/.npm /tmp/* /var/tmp/*
 
 # Copy built files from builder
