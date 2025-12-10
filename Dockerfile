@@ -38,8 +38,8 @@ RUN npm ci --no-audit
 # Copy source code and assets
 COPY . .
 
-# Build TypeScript - use explicit path to node_modules/.bin/tsc to avoid npx resolving wrong package
-RUN ./node_modules/.bin/tsc && cp -r assets dist/
+# Build TypeScript - use npm run build to match package.json script
+RUN npm run build
 
 # Production stage
 FROM node:20-slim
