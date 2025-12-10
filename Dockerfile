@@ -33,20 +33,31 @@ COPY package*.json ./
 
 # Install dependencies (including devDependencies for build)
 # Ensure devDependencies are installed by not setting NODE_ENV=production
-RUN npm ci --no-audit
+# Explicitly ensure TypeScript is available
+RUN npm ci --no-audit && \
+    echo "Verifying TypeScript installation..." && \
+    (test -d node_modules/typescript && echo "✓ TypeScript package found" || echo "✗ TypeScript package missing") && \
+    (test -f node_modules/.bin/tsc && echo "✓ tsc binary found" || (echo "✗ tsc binary missing, checking..." && ls -la node_modules/.bin/ | head -10))
 
 # Copy source code and assets
 COPY . .
 
-# Build TypeScript - use direct path to avoid npx resolving wrong package
-RUN echo "=== Verifying TypeScript installation ===" && \
-    ls -la node_modules/.bin/tsc && \
-    echo "=== TypeScript version ===" && \
-    node_modules/.bin/tsc --version && \
-    echo "=== Starting TypeScript compilation ===" && \
-    node_modules/.bin/tsc && \
-    echo "=== Copying assets ===" && \
-    (test -d assets && cp -r assets dist/ || echo "Warning: assets directory not found") && \
+# Build TypeScript - use node to run tsc directly from typescript package if binary not found
+RUN echo "=== Checking TypeScript installation ===" && \
+    if [ -f node_modules/.bin/tsc ]; then \
+        echo "Using tsc binary from node_modules/.bin" && \
+        node_modules/.bin/tsc && \
+        cp -r assets dist/; \
+    elif [ -f node_modules/typescript/bin/tsc ]; then \
+        echo "Using tsc from typescript package directly" && \
+        node node_modules/typescript/bin/tsc && \
+        cp -r assets dist/; \
+    else \
+        echo "TypeScript not found, installing..." && \
+        npm install typescript --save-dev --no-audit && \
+        node_modules/.bin/tsc && \
+        cp -r assets dist/; \
+    fi && \
     echo "=== Build completed successfully ==="
 
 # Production stage
