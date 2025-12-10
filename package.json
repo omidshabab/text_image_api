@@ -30,5 +30,8 @@
     "pdf-lib": "^1.17.1",
     "uploadthing": "^7.7.3",
     "uuid": "^11.1.0"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas-linux-arm64-gnu": "^0.1.74"
   }
 }
